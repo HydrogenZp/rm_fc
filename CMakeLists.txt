@@ -10,6 +10,9 @@ find_package(catkin REQUIRED COMPONENTS
     nav_msgs          
     geometry_msgs     
     sensor_msgs
+    tf2
+    tf2_ros
+    tf2_geometry_msgs
 )
 
 find_package(Eigen3 REQUIRED)
@@ -17,6 +20,13 @@ find_package(Eigen3 REQUIRED)
 catkin_package(
     INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIR}
     CATKIN_DEPENDS roscpp nav_msgs geometry_msgs sensor_msgs
+    roscpp
+    std_msgs
+    geometry_msgs
+    nav_msgs
+    tf2
+    tf2_ros
+    tf2_geometry_msgs
 )
 
 include_directories(

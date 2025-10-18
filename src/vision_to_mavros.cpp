@@ -1,10 +1,15 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Odometry.h>
-#include <Eigen/Eigen>
+#include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
+#include <geometry_msgs/TransformStamped.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
-Eigen::Vector3d p_mav;
-Eigen::Quaterniond q_mav;
+ros::Publisher vision_pub;
+std::shared_ptr<tf2_ros::Buffer> tf_buffer;
+std::shared_ptr<tf2_ros::TransformListener> tf_listener;
+
 /**
  * @brief Callback function for VINS odometry messages
  *
@@ -15,22 +20,40 @@ void vins_callback(const nav_msgs::Odometry::ConstPtr &msg)
     if (msg->header.frame_id != "world")
         return;
 
-    double x_north = msg->pose.pose.position.x; // NWU.x = North
-    double y_west = msg->pose.pose.position.y;  // NWU.y = West
-    double z_up = msg->pose.pose.position.z;    // NWU.z = Up
+    try
+    {
+        // 查找从body到fcu_link的变换
+        geometry_msgs::TransformStamped transform_stamped =
+            tf_buffer->lookupTransform("fcu_link", "body", ros::Time(0));
 
-    p_mav = Eigen::Vector3d(-y_west, x_north, z_up);
+        // 创建body系的位姿
+        geometry_msgs::PoseStamped body_pose;
+        body_pose.header = msg->header;
+        body_pose.header.frame_id = "body";
+        body_pose.pose = msg->pose.pose;
 
-    Eigen::Quaterniond q_nwu(
-        msg->pose.pose.orientation.w,
-        msg->pose.pose.orientation.x,
-        msg->pose.pose.orientation.y,
-        msg->pose.pose.orientation.z);
+        // 通过TF变换到fcu_link系
+        geometry_msgs::PoseStamped fcu_pose;
+        tf2::doTransform(body_pose, fcu_pose, transform_stamped);
 
-    Eigen::Quaterniond q_nwu_to_enu;
-    q_nwu_to_enu = Eigen::AngleAxisd(M_PI_2, Eigen::Vector3d::UnitZ());
+        // 发布变换后的位姿
+        geometry_msgs::PoseStamped vision;
+        vision.header.frame_id = "map";
+        vision.header.stamp = ros::Time::now();
+        vision.pose = fcu_pose.pose;
 
-    q_mav = q_nwu_to_enu * q_nwu;
+        vision_pub.publish(vision);
+
+        ROS_INFO_THROTTLE(1.0, "\nfcu_link position:\n   x: %.6f\n   y: %.6f\n   z: %.6f\n"
+                               "orientation:\n   x: %.6f\n   y: %.6f\n   z: %.6f\n   w: %.6f",
+                          vision.pose.position.x, vision.pose.position.y, vision.pose.position.z,
+                          vision.pose.orientation.x, vision.pose.orientation.y,
+                          vision.pose.orientation.z, vision.pose.orientation.w);
+    }
+    catch (tf2::TransformException &ex)
+    {
+        ROS_WARN_THROTTLE(1.0, "Transform lookup failed: %s", ex.what());
+    }
 }
 
 int main(int argc, char **argv)
@@ -42,40 +65,45 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "vins_to_mavros");
     ros::NodeHandle nh("~");
 
+    // 初始化TF
+    tf_buffer = std::make_shared<tf2_ros::Buffer>();
+    tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
+
+    // 发布静态TF: body到fcu_link的变换
+    static tf2_ros::StaticTransformBroadcaster static_broadcaster;
+    geometry_msgs::TransformStamped static_transform;
+
+    // 从参数服务器读取变换参数（body系相机到fcu的偏移）
+    double tx, ty, tz, qx, qy, qz, qw;
+    nh.param("transform/x", tx, 0.0);
+    nh.param("transform/y", ty, 0.0);
+    nh.param("transform/z", tz, 0.0);
+    nh.param("transform/qx", qx, 0.0);
+    nh.param("transform/qy", qy, 0.0);
+    nh.param("transform/qz", qz, 0.0);
+    nh.param("transform/qw", qw, 1.0);
+
+    static_transform.header.stamp = ros::Time::now();
+    static_transform.header.frame_id = "body";
+    static_transform.child_frame_id = "fcu_link";
+    static_transform.transform.translation.x = tx;
+    static_transform.transform.translation.y = ty;
+    static_transform.transform.translation.z = tz;
+    static_transform.transform.rotation.x = qx;
+    static_transform.transform.rotation.y = qy;
+    static_transform.transform.rotation.z = qz;
+    static_transform.transform.rotation.w = qw;
+
+    static_broadcaster.sendTransform(static_transform);
+
+    ROS_INFO("Published static TF from body to fcu_link:");
+    ROS_INFO("  Translation: [%.3f, %.3f, %.3f]", tx, ty, tz);
+    ROS_INFO("  Rotation: [%.3f, %.3f, %.3f, %.3f]", qx, qy, qz, qw);
+
     ros::Subscriber slam_sub = nh.subscribe<nav_msgs::Odometry>("odom", 100, vins_callback);
-    ros::Publisher vision_pub = nh.advertise<geometry_msgs::PoseStamped>("vision_pose", 10);
+    vision_pub = nh.advertise<geometry_msgs::PoseStamped>("vision_pose", 10);
 
-    ros::Rate rate(30);
-
-    /**
-     * @brief Construct a new while object
-     *
-     */
-    while (ros::ok())
-    {
-        geometry_msgs::PoseStamped vision;
-        vision.header.frame_id = "map";
-        vision.header.stamp = ros::Time::now();
-
-        vision.pose.position.x = -p_mav[0];
-        vision.pose.position.y = -p_mav[1];
-        vision.pose.position.z = p_mav[2];
-
-        vision.pose.orientation.x = q_mav.x();
-        vision.pose.orientation.y = q_mav.y();
-        vision.pose.orientation.z = q_mav.z();
-        vision.pose.orientation.w = q_mav.w();
-
-        vision_pub.publish(vision);
-
-        ROS_INFO_THROTTLE(1.0, "\nposition:\n   x: %.6f\n   y: %.6f\n   z: %.6f\n"
-                               "orientation:\n   x: %.6f\n   y: %.6f\n   z: %.6f\n   w: %.6f",
-                          p_mav[0], p_mav[1], p_mav[2],
-                          q_mav.x(), q_mav.y(), q_mav.z(), q_mav.w());
-
-        ros::spinOnce();
-        rate.sleep();
-    }
+    ros::spin();
 
     return 0;
 }
