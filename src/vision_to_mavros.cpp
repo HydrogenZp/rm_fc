@@ -76,7 +76,10 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "vins_to_mavros");
   ros::NodeHandle nh("~");
 
-  // 初始化TF
+  /**
+   * @brief TF2 Listener Initialization
+   *
+   */
   tf_buffer = std::make_shared<tf2_ros::Buffer>();
   tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
 
