@@ -1,0 +1,47 @@
+<launch>
+    <!-- MAVROS -->
+    <arg name="fcu_url" default="/dev/ttyUSB0:230400" />
+    <arg name="gcs_url" default="" />
+    <arg name="tgt_system" default="1" />
+    <arg name="tgt_component" default="1" />
+    <arg name="log_output" default="screen" />
+    <arg name="fcu_protocol" default="v2.0" />
+    <arg name="respawn_mavros" default="false" />
+
+    <include file="$(find mavros)/launch/node.launch">
+        <arg name="pluginlists_yaml" value="$(find mavros)/launch/acfly_pluginlist.yaml"/>
+        <arg name="config_yaml" value="$(find mavros)/launch/acfly_config.yaml"/>
+        <arg name="fcu_url" value="$(arg fcu_url)"/>
+        <arg name="gcs_url" value="$(arg gcs_url)"/>
+        <arg name="tgt_system" value="$(arg tgt_system)"/>
+        <arg name="tgt_component" value="$(arg tgt_component)"/>
+        <arg name="log_output" value="$(arg log_output)"/>
+        <arg name="fcu_protocol" value="$(arg fcu_protocol)"/>
+        <arg name="respawn_mavros" value="$(arg respawn_mavros)"/>
+    </include>
+
+    <!-- RealSense Camera -->
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch" />
+
+    <!-- VINS-Fusion -->
+    <arg name="config_file" default="/home/dynamicx/slam_ws/src/VINS-Fusion/config/realsense_d435i/d435i_imu.yaml"/>
+    <node pkg="vins" type="vins_node" name="vins_node" args="$(arg config_file)" output="screen" respawn_delay="5"/>
+    <node pkg="loop_fusion" type="loop_fusion_node" name="loop_fusion_node" args="$(arg config_file)" output="screen" respawn_delay="5"/>
+
+    <!-- Wait for VINS to initialize before starting vision_to_mavros -->
+    <node pkg="rostopic" type="rostopic" name="wait_for_vins_odom" args="echo -n -c 1 /vins_node/odometry" output="screen" launch-prefix="bash -c 'sleep 5; $0 $@'" />
+
+    <!-- VINS to MAVROS -->
+    <node pkg="rm_fc" type="vins_to_mavros" name="vins_to_mavros" output="screen">
+        <remap from="~vision_pose" to="/mavros/vision_pose/pose" />
+        <remap from="~odom" to="/vins_node/odometry" />
+        <param name="transform/x" value="-0.03"/>  
+        <param name="transform/y" value="0.14"/>
+        <param name="transform/z" value="0"/>
+        <param name="transform/qx" value="0"/>
+        <param name="transform/qy" value="0"/>
+        <param name="transform/qz" value="0.0"/>
+        <param name="transform/qw" value="1"/>
+    </node>
+
+</launch>
