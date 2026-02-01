@@ -1,0 +1,26 @@
+<launch>
+    <!-- odin1_base_link 相对于 fcu_link 的偏置配置 -->
+    <arg name="odin1_to_fcu_x" default="0.0" doc="odin1相对fcu的X偏移(前+)"/>
+    <arg name="odin1_to_fcu_y" default="0.0" doc="odin1相对fcu的Y偏移(左+)"/>
+    <arg name="odin1_to_fcu_z" default="0.0" doc="odin1相对fcu的Z偏移(上+)"/>
+    <arg name="odin1_to_fcu_roll" default="0.0" doc="odin1相对fcu的Roll角(rad)"/>
+    <arg name="odin1_to_fcu_pitch" default="0.0" doc="odin1相对fcu的Pitch角(rad)"/>
+    <arg name="odin1_to_fcu_yaw" default="0.0" doc="odin1相对fcu的Yaw角(rad)"/>
+
+    <!-- odom_to_acfly 节点 -->
+    <node pkg="rm_fc" type="odom_to_acfly" name="odom_to_acfly" output="screen" respawn="true">
+        <param name="odin1_to_fcu_x" value="$(arg odin1_to_fcu_x)"/>
+        <param name="odin1_to_fcu_y" value="$(arg odin1_to_fcu_y)"/>
+        <param name="odin1_to_fcu_z" value="$(arg odin1_to_fcu_z)"/>
+        <param name="odin1_to_fcu_roll" value="$(arg odin1_to_fcu_roll)"/>
+        <param name="odin1_to_fcu_pitch" value="$(arg odin1_to_fcu_pitch)"/>
+        <param name="odin1_to_fcu_yaw" value="$(arg odin1_to_fcu_yaw)"/>
+        <param name="odom_frame" value="odom"/>
+        <param name="odin1_frame" value="odin1_base_link"/>
+        <param name="fcu_frame" value="fcu_link"/>
+    </node>
+
+    <!-- 静态TF: odin1_base_link -> fcu_link -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odin1_to_fcu_tf" 
+          args="$(arg odin1_to_fcu_x) $(arg odin1_to_fcu_y) $(arg odin1_to_fcu_z) $(arg odin1_to_fcu_yaw) $(arg odin1_to_fcu_pitch) $(arg odin1_to_fcu_roll) odin1_base_link fcu_link" />
+</launch>

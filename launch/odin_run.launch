@@ -1,0 +1,15 @@
+<launch>
+    <!-- 基于 odin_ros_driver/launch_ROS1/odin1_ros1.launch 修改，增加 respawn=true -->
+    
+    <arg name="node_name" default="host_sdk_sample"/>
+    <arg name="config_file" default="$(find odin_ros_driver)/config/control_command.yaml"/>
+    
+    <node name="$(arg node_name)" pkg="odin_ros_driver" type="host_sdk_sample" output="screen" respawn="true">
+        <param name="config_file" value="$(arg config_file)"/>
+    </node>
+
+    <node pkg="odin_ros_driver" type="pcd2depth_node" name="pcd2depth_node" output="screen" respawn="true">
+        <rosparam command="load" file="$(find odin_ros_driver)/config/control_command.yaml"/>
+        <param name="calib_file_path" value="$(find odin_ros_driver)/config/calib.yaml"/>
+    </node>
+</launch>

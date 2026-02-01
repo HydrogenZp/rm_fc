@@ -1,0 +1,7 @@
+<launch>
+    <node pkg="rm_fc" type="odom_debug" name="odom_debug" output="screen">
+        <param name="x" value="1.0"/>
+        <param name="y" value="0.0"/>
+        <param name="z" value="0.0"/>
+    </node>
+</launch>

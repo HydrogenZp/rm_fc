@@ -1,0 +1,15 @@
+[Unit]
+Description=SLAM Startup Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hyd
+ExecStart=/home/hyd/slam_ws/src/rm_fc/script/slam_startup.sh
+Restart=always
+RestartSec=10
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target
